@@ -24,6 +24,33 @@
             </div>
         </div>
 
+        {% if preview and preview %}
+            <h3>{{ preview.filename }}</h3>
+            <form action="/update_preview" method="post">
+                {% for key, value in preview.summary.items() %}
+                    <div class="mb-2">
+                        <label class="form-label">{{ key }}</label>
+                        <input type="text" class="form-control" name="summary[{{ key }}]" value="{{ value }}">
+                    </div>
+                {% endfor %}
+                <hr>
+                <h5>Add New Field</h5>
+                <div class="mb-2">
+                    <input type="text" class="form-control" name="new_key" placeholder="New Key">
+                </div>
+                <div class="mb-2">
+                    <input type="text" class="form-control" name="new_value" placeholder="New Value">
+                </div>
+                <button type="submit" class="btn btn-primary mt-2">Update Preview</button>
+            </form>
+        {% else %}
+            <h4 class="text-muted">No preview available. Please upload a PDF file.</h4>
+        {% endif %}
+
+
+
+
+
         <div class="card mb-4">
             <div class="card-header">Search in PDFs</div>
             <div class="card-body">
@@ -31,6 +58,7 @@
                     <div class="col-md-5">
                         <input type="text" name="q" class="form-control" placeholder="Search by keyword...">
                     </div>
+
 
                     <div class="col-md-5">
                         <select name="filename" class="form-control">

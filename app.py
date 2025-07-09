@@ -14,8 +14,8 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 client = MongoClient("mongodb://localhost:27017/")
 db = client["pdf_database"]
 collection = db["documents"]
+preview_collection = db["recent_uploads"]
 
-from pdf2image import convert_from_path
 import pytesseract
 
 pytesseract.pytesseract.tesseract_cmd = r"C:\Users\james\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
@@ -37,10 +37,26 @@ def extract_pdf_text(filepath):
     return text
 
 
+IMPORTANT_KEYWORDS = [
+    "height", "area", "bedroom", "bedrooms", "dimension", "dimensions", "sqft", "location", "floor", "size", "bhk"
+]
+
+def extract_key_value_pairs(text):
+    kv_pairs = {}
+    lines = text.splitlines()
+    for line in lines:
+        if ':' in line:
+            key, value = line.split(':', 1)
+            kv_pairs[key.strip()] = value.strip()
+    return kv_pairs
 
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
+
+    preview = preview_collection.find_one()
+    
+        
     if request.method == 'POST':
         uploaded_files = request.files.getlist('pdfs')
         for uploaded_file in uploaded_files:
@@ -49,6 +65,10 @@ def home():
                 uploaded_file.save(filepath)
 
                 content = extract_pdf_text(filepath)
+                
+                summary = extract_key_value_pairs(content)
+
+                
                 if not collection.find_one({"filename": uploaded_file.filename}):
                     data = {
                         "filename": uploaded_file.filename,
@@ -56,11 +76,49 @@ def home():
                         "keywords": content.lower().split()[:50]
                     }
                     collection.insert_one(data)
-                else:
-                    print(f"{uploaded_file.filename} already exists in the database.")
+                    
+                preview_collection.delete_many({})
+                preview_collection.insert_one({
+                    "filename": uploaded_file.filename,
+                    "summary": summary,
+                    "content": content
+                })
+
+
+                preview = preview_collection.find_one()
+
         return redirect('/')
     all_filenames = collection.distinct("filename")
-    return render_template('home.html', filenames=all_filenames)
+    return render_template('home.html', filenames=all_filenames, preview=preview)
+
+
+@app.route('/update_preview', methods=['POST'])
+def update_preview():
+    summary_data = request.form.to_dict(flat=False)
+    updated_summary = {}
+
+    # Extract existing key-value pairs
+    for key in request.form:
+        if key.startswith("summary["):
+            actual_key = key[8:-1]  # strip 'summary[' and ']'
+            updated_summary[actual_key] = request.form.get(key)
+
+    # Handle new key-value if provided
+    new_key = request.form.get('new_key', '').strip()
+    new_value = request.form.get('new_value', '').strip()
+    if new_key and new_value:
+        updated_summary[new_key] = new_value
+
+    doc = preview_collection.find_one()
+    if doc:
+        preview_collection.update_one(
+            {"_id": doc["_id"]},
+            {"$set": {"summary": updated_summary}}
+        )
+
+    return redirect('/')
+
+
 
 import re
 from markupsafe import Markup
