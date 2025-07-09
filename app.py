@@ -8,13 +8,16 @@ from PIL import Image
 app = Flask(__name__)
 UPLOAD_FOLDER = 'source'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
+app.secret_key = ' '
 
 
 client = MongoClient("mongodb://localhost:27017/")
 db = client["pdf_database"]
 collection = db["documents"]
 preview_collection = db["recent_uploads"]
+
+
+
 
 import pytesseract
 
@@ -54,6 +57,9 @@ def extract_key_value_pairs(text):
 @app.route('/', methods=['GET', 'POST'])
 def home():
 
+    if not session.pop('uploaded', False):
+        preview_collection.delete_many({})
+    
     preview = preview_collection.find_one()
     
         
@@ -86,8 +92,14 @@ def home():
 
 
                 preview = preview_collection.find_one()
+                
+                session['uploaded'] = True
 
         return redirect('/')
+    
+    if request.args.get('refresh') == '1':
+        preview_collection.delete_many({})
+       
     all_filenames = collection.distinct("filename")
     return render_template('home.html', filenames=all_filenames, preview=preview)
 
@@ -97,13 +109,12 @@ def update_preview():
     summary_data = request.form.to_dict(flat=False)
     updated_summary = {}
 
-    # Extract existing key-value pairs
     for key in request.form:
         if key.startswith("summary["):
-            actual_key = key[8:-1]  # strip 'summary[' and ']'
+            actual_key = key[8:-1] 
             updated_summary[actual_key] = request.form.get(key)
 
-    # Handle new key-value if provided
+
     new_key = request.form.get('new_key', '').strip()
     new_value = request.form.get('new_value', '').strip()
     if new_key and new_value:
@@ -115,8 +126,8 @@ def update_preview():
             {"_id": doc["_id"]},
             {"$set": {"summary": updated_summary}}
         )
-
-    return redirect('/')
+        doc['summary'] = updated_summary
+    return render_template('preview_section.html', preview=doc)
 
 
 

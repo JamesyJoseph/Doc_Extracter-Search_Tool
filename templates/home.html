@@ -24,31 +24,36 @@
             </div>
         </div>
 
-        {% if preview and preview %}
-            <h3>{{ preview.filename }}</h3>
-            <form action="/update_preview" method="post">
-                {% for key, value in preview.summary.items() %}
-                    <div class="mb-2">
-                        <label class="form-label">{{ key }}</label>
-                        <input type="text" class="form-control" name="summary[{{ key }}]" value="{{ value }}">
+        {% if preview %}
+            <div id="preview-container">
+                <div class="card mb-4 border-warning">
+                    <div class="card-header bg-warning text-dark fw-bold">
+                        {{ preview.filename }}
                     </div>
-                {% endfor %}
-                <hr>
-                <h5>Add New Field</h5>
-                <div class="mb-2">
-                    <input type="text" class="form-control" name="new_key" placeholder="New Key">
+                    <form id="preview-form" action="/update_preview" method="post" onsubmit="return updatePreview(event)" style="width: auto; height: 300px; overflow: auto; border: 1px solid #ccc;">
+                        {% for key, value in preview.summary.items() %}
+                            <div class="mb-2" style="padding:10px">
+                                <label class="form-label">{{ key }}</label>
+                                <input type="text" class="form-control" name="summary[{{ key }}]" value="{{ value }}">
+                            </div>
+                        {% endfor %}
+                        <hr>
                 </div>
-                <div class="mb-2">
-                    <input type="text" class="form-control" name="new_value" placeholder="New Value">
-                </div>
-                <button type="submit" class="btn btn-primary mt-2">Update Preview</button>
-            </form>
-        {% else %}
-            <h4 class="text-muted">No preview available. Please upload a PDF file.</h4>
+                        <h5>Add New Field</h5>
+                        <div class="mb-2">
+                            <input type="text" class="form-control" name="new_key" placeholder="New Key">
+                        </div>
+                        <div class="mb-2">
+                            <input type="text" class="form-control" name="new_value" placeholder="New Value">
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-2">Insert</button>
+                    </form>
+                
+            </div>
         {% endif %}
 
 
-
+        <br><br>
 
 
         <div class="card mb-4">
@@ -84,4 +89,28 @@
     </div>
 
 </body>
+
+<script>
+function updatePreview(event) {
+    event.preventDefault(); // Prevent full page refresh
+
+    const form = document.getElementById('preview-form');
+    const formData = new FormData(form);
+
+    fetch('/update_preview', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.text())
+    .then(html => {
+        document.getElementById('preview-container').innerHTML = html;
+    })
+    .catch(error => {
+        console.error('Error updating preview:', error);
+    });
+
+    return false;
+}
+</script>
+
 </html>
