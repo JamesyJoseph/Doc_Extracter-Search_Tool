@@ -15,14 +15,12 @@
         <h5 class="text-muted mb-4">Results for:{{ query }}</h5>
 
     {% for doc in results %}
-        <div style="margin-bottom: 20px; border-bottom: 1px solid gray;">
-            <h4><a href="{{ url_for('serve_pdf', filename=doc.filename) }}" target="_blank">{{ doc.filename }}</a></h4>
-            {% set highlight = query %}
-            {% set snippet = doc.content[:100] %}
-            {% set highlighted_snippet = snippet.replace(highlight, "<mark>" + highlight + "</mark>") %}
-            <p>{{ highlighted_snippet | safe }}{{ doc.content[:500] }}...</p>
-
-        </div>
+    <div style="margin-bottom: 20px;">
+        <h3><a href="{{ doc.link }}" target="_blank">{{ doc.filename }}</a></h3>
+        {% for snippet in doc.snippets %}
+            <p>{{ snippet|safe }}...</p>
+        {% endfor %}
+    </div>
     {% else %}
         <p>No results found.</p>
     {% endfor %}

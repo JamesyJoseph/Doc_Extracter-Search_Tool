@@ -62,6 +62,25 @@ def home():
 
     return render_template('home.html')
 
+import re
+from markupsafe import Markup
+
+def highlight_snippet(text, keyword, context_words=10, max_snippets=5):
+    words = text.split()
+    snippets = []
+    keyword_lower = keyword.lower()
+
+    for i, word in enumerate(words):
+        if keyword_lower in word.lower():
+            start = max(i - context_words, 0)
+            end = min(i + context_words + 1, len(words))
+            snippet = " ".join(words[start:end])
+            snippet = re.sub(f'({re.escape(keyword)})', r'<mark>\1</mark>', snippet, flags=re.IGNORECASE)
+            snippets.append(snippet)
+            if len(snippets) >= max_snippets:
+                break
+    return snippets if snippets else ["<i>No matching content found.</i>"]
+
 @app.route('/search', methods=['GET'])
 def search():
     query = request.args.get('q', '')
@@ -73,8 +92,23 @@ def search():
     if filename:
         search_filter["filename"] = {"$regex": filename, "$options": "i"}
 
-    results = collection.find(search_filter)
+    documents = collection.find(search_filter)
+
+    results = []
+    for doc in documents:
+        if query:
+            snippets = highlight_snippet(doc['content'], query)
+        else:
+            brief = " ".join(doc['content'].split()[:50]) + "..."
+            snippets = [brief]
+        results.append({
+            "filename": doc['filename'],
+            "snippets": snippets,
+            "link": url_for('serve_pdf', filename=doc['filename'])
+        })
+
     return render_template('result.html', results=results, query=query, filename=filename)
+
 
 @app.route('/pdfs/<path:filename>')
 def serve_pdf(filename):
