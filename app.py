@@ -59,8 +59,8 @@ def home():
                 else:
                     print(f"{uploaded_file.filename} already exists in the database.")
         return redirect('/')
-
-    return render_template('home.html')
+    all_filenames = collection.distinct("filename")
+    return render_template('home.html', filenames=all_filenames)
 
 import re
 from markupsafe import Markup
@@ -107,7 +107,10 @@ def search():
             "link": url_for('serve_pdf', filename=doc['filename'])
         })
 
-    return render_template('result.html', results=results, query=query, filename=filename)
+    # Get all unique filenames from MongoDB
+    all_filenames = collection.distinct("filename")
+
+    return render_template('result.html', results=results, query=query, filename=filename, filenames=all_filenames)
 
 
 @app.route('/pdfs/<path:filename>')

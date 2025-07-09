@@ -31,9 +31,16 @@
                     <div class="col-md-5">
                         <input type="text" name="q" class="form-control" placeholder="Search by keyword...">
                     </div>
+
                     <div class="col-md-5">
-                        <input type="text" name="filename" class="form-control" placeholder="Search by filename...">
+                        <select name="filename" class="form-control">
+                            <option value="" disabled selected> Search by File </option>
+                            {% for fname in filenames %}
+                                <option value="{{ fname }}" {% if fname == filename %}selected{% endif %}>{{ fname }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
+
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-success w-100">Search</button>
                     </div>
