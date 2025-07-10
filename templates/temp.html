@@ -96,13 +96,14 @@
                         {% endfor %}
                     </div>
                     <hr>
-                    <h5>Add New Unit</h5>
-                    <div id="unit-fields"></div>
-
-                    <button type="button" class="btn btn-secondary mb-2" onclick="addUnitField()">Add Field</button>
-
-                    <input type="hidden" name="new_unit_fields" id="new_unit_fields_json">
-                    <button type="submit" class="btn btn-primary">Insert / Update Units</button>
+                    <h5 style="padding:5px">Add New Field</h5>
+                        <div class="mb-2" style="padding:10px">
+                            <input type="text" class="form-control" name="new_key" placeholder="New Key">
+                        </div>
+                        <div class="mb-2" style="padding:10px">
+                            <input type="text" class="form-control" name="new_value" placeholder="New Value">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Insert</button>
                 </form>
 
                 <form action="/push_to_original" method="post" class="mt-3">
@@ -174,53 +175,6 @@ function updatePreview(event) {
 
     return false;
 }
-
-let unitFields = [];
-
-function addUnitField() {
-    const index = unitFields.length;
-    const container = document.getElementById('unit-fields');
-
-    const row = document.createElement('div');
-    row.className = 'row mb-2';
-    row.innerHTML = `
-        <div class="col-md-5">
-            <input type="text" class="form-control" placeholder="Key" onchange="updateUnitField(${index}, 'key', this.value)">
-        </div>
-        <div class="col-md-5">
-            <input type="text" class="form-control" placeholder="Value" onchange="updateUnitField(${index}, 'value', this.value)">
-        </div>
-        <div class="col-md-2">
-            <button type="button" class="btn btn-danger" onclick="removeUnitField(${index})">X</button>
-        </div>
-    `;
-    container.appendChild(row);
-    unitFields.push({key: '', value: ''});
-    updateJsonField();
-}
-
-function updateUnitField(index, type, value) {
-    unitFields[index][type] = value;
-    updateJsonField();
-}
-
-function removeUnitField(index) {
-    unitFields.splice(index, 1);
-    document.getElementById('unit-fields').children[index].remove();
-    updateJsonField();
-}
-
-function updateJsonField() {
-    const data = {};
-    for (const pair of unitFields) {
-        if (pair.key.trim() !== '' && pair.value.trim() !== '') {
-            data[pair.key.trim()] = pair.value.trim();
-        }
-    }
-    document.getElementById('new_unit_fields_json').value = JSON.stringify(data);
-}
-
-
 </script>
 
 </html>

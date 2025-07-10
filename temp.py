@@ -131,34 +131,24 @@ def home():
     return render_template('home.html', filenames=all_filenames, preview=preview)
 
 
-import json
 from collections import defaultdict
 
 @app.route('/update_preview', methods=['POST'])
 def update_preview():
-    form_data = request.form.to_dict()
+    summary_data = request.form.to_dict()
     updated_summary = {}
     updated_units = defaultdict(dict)
 
-    for key in form_data:
+    for key in summary_data:
         if key.startswith("summary["):
             actual_key = key[8:-1]
-            updated_summary[actual_key] = form_data[key]
-        elif key.startswith("units["):
-            match = re.match(r'units\[(\d+)\]\[(.+?)\]', key)
-            if match:
-                idx, subkey = match.groups()
-                updated_units[int(idx)][subkey] = form_data[key]
+            updated_summary[actual_key] = request.form.get(key)
 
-    # Handle new dynamic unit from JSON string
-    new_unit_raw = form_data.get("new_unit_fields", "")
-    if new_unit_raw:
-        try:
-            new_unit = json.loads(new_unit_raw)
-            if isinstance(new_unit, dict) and new_unit:
-                updated_units[len(updated_units)] = new_unit
-        except json.JSONDecodeError:
-            flash("Failed to parse new unit fields.", "danger")
+        elif key.startswith("units["):
+            unit_index = re.search(r'units\[(\d+)\]\[(.+?)\]', key)
+            if unit_index:
+                idx, subkey = unit_index.groups()
+                updated_units[int(idx)][subkey] = request.form.get(key)
 
     doc = preview_collection.find_one()
     if doc:

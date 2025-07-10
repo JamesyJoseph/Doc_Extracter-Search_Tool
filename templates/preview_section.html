@@ -1,29 +1,35 @@
-<div id="preview-container">
-                <div class="card mb-4 border-warning">
-                    <div class="card-header bg-warning text-dark fw-bold">
-                        {{ preview.filename }}
-                    </div>
-                    <form id="preview-form" action="/update_preview" method="post" onsubmit="return updatePreview(event)" style="width: auto; height: 300px; overflow: auto; border: 1px solid #ccc;">
-                        {% for key, value in preview.summary.items() %}
-                            <div class="mb-2" style="padding:10px">
-                                <label class="form-label">{{ key }}</label>
-                                <input type="text" class="form-control" name="summary[{{ key }}]" value="{{ value }}">
+{% if preview %}
+        <div id="preview-container">
+            <div class="card mb-4 border-warning">
+                <div class="card-header bg-warning text-dark fw-bold">
+                    {{ preview.filename }}
+                </div>
+                <form id="preview-form" action="/update_preview" method="post" onsubmit="return updatePreview(event)">
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        {% for unit in preview.units %}
+                            <div class="border p-3 mb-3 rounded bg-light">
+                                <h5>Unit {{ loop.index }}</h5>
+                                {% for key, value in unit.items() %}
+                                    <div class="mb-2">
+                                        <label><strong>{{ key }}:</strong></label>
+                                        <input type="text" class="form-control" name="units[{{ loop.index0 }}][{{ key }}]" value="{{ value }}">
+                                    </div>
+                                {% endfor %}
                             </div>
                         {% endfor %}
-                        <hr>
-                
-                        <h5 style="padding:10px">Add New Field</h5>
-                        <div class="mb-2" style="padding:10px">
-                            <input type="text" class="form-control" name="new_key" placeholder="New Key">
-                        </div>
-                        <div class="mb-2" style="padding:10px">
-                            <input type="text" class="form-control" name="new_value" placeholder="New Value">
-                        </div>
-                        <button type="submit" class="btn btn-primary mt-2" style="padding:8px">Insert</button>
+                    </div>
+                        <h5>Add New Unit</h5>
+                        <div id="unit-fields"></div>
+
+                        <button type="button" class="btn btn-secondary mb-2" onclick="addUnitField()">Add Field</button>
+
+                        <input type="hidden" name="new_unit_fields" id="new_unit_fields_json">
+                        <button type="submit" class="btn btn-primary">Insert / Update Units</button>
                     </form>
                     <form action="/push_to_original" method="post" class="mt-3">
                         <button type="submit" class="btn btn-success ms-2" style="float:right"><i class="bi bi-plus"></i></button>
                     </form>
                 </div>
-</div>
-
+        </div>
+{% endif %}
+    
