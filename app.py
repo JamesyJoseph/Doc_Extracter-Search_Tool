@@ -130,6 +130,35 @@ def update_preview():
     return render_template('preview_section.html', preview=doc)
 
 
+@app.route('/push_to_original', methods=['POST'])
+def push_to_original():
+    doc = preview_collection.find_one()
+    if not doc:
+        flash("No preview available to push.", "danger")
+        return redirect('/')
+
+    try:
+        existing = collection.find_one({"filename": doc["filename"]})
+        if existing:
+            collection.update_one(
+                {"_id": existing["_id"]},
+                {"$set": {
+                    "summary": doc.get("summary", {}),
+                    "content": doc.get("content", "")
+                }}
+            )
+            flash(f"Updated existing record: {doc['filename']}", "success")
+        else:
+            collection.insert_one(doc)
+            flash(f"Inserted new document: {doc['filename']}", "success")
+
+    except Exception as e:
+        flash(f"Error while pushing to database: {str(e)}", "danger")
+
+    return redirect('/')
+
+
+
 
 import re
 from markupsafe import Markup

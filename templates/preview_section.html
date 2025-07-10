@@ -11,6 +11,7 @@
                             </div>
                         {% endfor %}
                         <hr>
+                
                         <h5 style="padding:10px">Add New Field</h5>
                         <div class="mb-2" style="padding:10px">
                             <input type="text" class="form-control" name="new_key" placeholder="New Key">
@@ -20,6 +21,9 @@
                         </div>
                         <button type="submit" class="btn btn-primary mt-2" style="padding:8px">Insert</button>
                     </form>
-                
+                    <form action="/push_to_original" method="post" class="mt-3">
+                        <button type="submit" class="btn btn-success ms-2" style="float:right"><i class="bi bi-plus"></i></button>
+                    </form>
+                </div>
 </div>
 
