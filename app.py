@@ -5,7 +5,7 @@ import os
 from pdf2image import convert_from_path
 from PIL import Image
 import re
-import uuid
+
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'source'
@@ -137,43 +137,57 @@ from collections import defaultdict
 
 @app.route('/update_preview', methods=['POST'])
 def update_preview():
-    form_data = request.form.to_dict()
-    updated_summary = {}
-    updated_units = defaultdict(dict)
+    import json, re
+    from flask import flash, redirect, url_for
 
-    for key in form_data:
-        if key.startswith("summary["):
-            actual_key = key[8:-1]
-            updated_summary[actual_key] = form_data[key]
-        elif key.startswith("units["):
-            match = re.match(r'units\[(\d+)\]\[(.+?)\]', key)
-            if match:
-                idx, subkey = match.groups()
-                updated_units[int(idx)][subkey] = form_data[key]
+    # Get latest preview document
+    preview = preview_collection.find_one(sort=[('_id', -1)])
+    if not preview:
+        flash("No preview available to update. Please upload a file.", "danger")
+        return redirect(url_for('home'))
 
-    # Handle new dynamic unit from JSON string
-    new_unit_raw = form_data.get("new_unit_fields", "")
-    if new_unit_raw:
+    existing_units = preview.get("units", [])
+    updated_units = {}
+
+    # Parse updated unit fields from form
+    for key, value in request.form.items():
+        unit_match = re.match(r'units\[(\d+)\]\[(.+?)\]', key)
+        if unit_match:
+            index = int(unit_match.group(1))
+            field = unit_match.group(2)
+            if index not in updated_units:
+                updated_units[index] = {}
+            updated_units[index][field] = value.strip()
+
+      # Apply updates: if unit index exists, update it, otherwise keep as-is
+    merged_units = []
+    for idx, original in enumerate(existing_units):
+        merged = original.copy()
+        if idx in updated_units:
+            for key, val in updated_units[idx].items():
+                merged[key] = val  # Overwrite only specified fields
+        merged_units.append(merged)
+
+
+    # Handle newly added unit (if any)
+    new_unit_data = request.form.get("new_unit_fields")
+    if new_unit_data:
         try:
-            new_unit = json.loads(new_unit_raw)
+            new_unit = json.loads(new_unit_data)
             if isinstance(new_unit, dict) and new_unit:
-                updated_units[len(updated_units)] = new_unit
+                merged_units.append(new_unit)
         except json.JSONDecodeError:
-            flash("Failed to parse new unit fields.", "danger")
+            flash("Invalid new unit data submitted.", "warning")
 
-    doc = preview_collection.find_one()
-    if doc:
-        preview_collection.update_one(
-            {"_id": doc["_id"]},
-            {"$set": {
-                "summary": updated_summary,
-                "units": list(updated_units.values())
-            }}
-        )
-        doc['summary'] = updated_summary
-        doc['units'] = list(updated_units.values())
+    # Update only 'units' in the preview collection
+    preview_collection.update_one(
+        {"_id": preview["_id"]},
+        {"$set": {"units": merged_units}}
+    )
 
-    return render_template('preview_section.html', preview=doc)
+    updated_preview = preview_collection.find_one({"_id": preview["_id"]})
+    return render_template("preview_section.html", preview=updated_preview)
+
 
 
 @app.route('/push_to_original', methods=['POST'])

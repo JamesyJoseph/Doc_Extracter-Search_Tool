@@ -159,6 +159,7 @@ function updatePreview(event) {
 
     const form = document.getElementById('preview-form');
     const formData = new FormData(form);
+    console.log("Data",form);
 
     fetch('/update_preview', {
         method: 'POST',
@@ -219,7 +220,6 @@ function updateJsonField() {
     }
     document.getElementById('new_unit_fields_json').value = JSON.stringify(data);
 }
-
 
 </script>
 
