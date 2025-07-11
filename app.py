@@ -140,36 +140,50 @@ def update_preview():
     import json, re
     from flask import flash, redirect, url_for
 
-    # Get latest preview document
     preview = preview_collection.find_one(sort=[('_id', -1)])
     if not preview:
         flash("No preview available to update. Please upload a file.", "danger")
         return redirect(url_for('home'))
 
     existing_units = preview.get("units", [])
-    updated_units = {}
+    updated_units = {}     # updates to existing units
+    new_units = {}         # new entries reusing same indexes (0, 1, ...) but outside existing range
 
-    # Parse updated unit fields from form
+    existing_len = len(existing_units)
+
+    # Parse all form fields
     for key, value in request.form.items():
         unit_match = re.match(r'units\[(\d+)\]\[(.+?)\]', key)
         if unit_match:
             index = int(unit_match.group(1))
             field = unit_match.group(2)
-            if index not in updated_units:
-                updated_units[index] = {}
-            updated_units[index][field] = value.strip()
+            value = value.strip()
 
-      # Apply updates: if unit index exists, update it, otherwise keep as-is
+            # Classify as update or new
+            if index < existing_len:
+                if index not in updated_units:
+                    updated_units[index] = {}
+                updated_units[index][field] = value
+            else:
+                if index not in new_units:
+                    new_units[index] = {}
+                new_units[index][field] = value
+
+    # Merge updates with existing units
     merged_units = []
     for idx, original in enumerate(existing_units):
         merged = original.copy()
         if idx in updated_units:
-            for key, val in updated_units[idx].items():
-                merged[key] = val  # Overwrite only specified fields
+            merged.update(updated_units[idx])
         merged_units.append(merged)
 
+    # Append any new units
+    for idx in sorted(new_units.keys()):
+        new_unit = new_units[idx]
+        if new_unit:  # avoid empty units
+            merged_units.append(new_unit)
 
-    # Handle newly added unit (if any)
+    # If extra unit is passed via JSON string
     new_unit_data = request.form.get("new_unit_fields")
     if new_unit_data:
         try:
@@ -179,7 +193,7 @@ def update_preview():
         except json.JSONDecodeError:
             flash("Invalid new unit data submitted.", "warning")
 
-    # Update only 'units' in the preview collection
+    # Update in DB
     preview_collection.update_one(
         {"_id": preview["_id"]},
         {"$set": {"units": merged_units}}

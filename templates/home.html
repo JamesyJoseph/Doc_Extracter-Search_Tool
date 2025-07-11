@@ -33,47 +33,7 @@
             </div>
         </div>
 
-         <!-- {% if preview is not none and preview %}
-            <div id="preview-container">
-                <div class="card mb-4 border-warning">
-                    <div class="card-header bg-warning text-dark fw-bold">
-                        {{ preview.filename }}
-                    </div>
-                    <form id="preview-form" action="/update_preview" method="post" onsubmit="return updatePreview(event)">
-                        <div style="max-height: 300px; overflow-y: auto;">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr><th>Field</th><th>Value</th></tr>
-                            </thead>
-                            <tbody>
-                            {% for key, value in preview.summary.items() %}
-                                <tr>
-                                    <td>{{ key }}</td>
-                                    <td><input type="text" class="form-control" name="summary[{{ key }}]" value="{{ value }}"></td>
-                                </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                        </div>
-                        <hr>
-                        <h5 style="padding:10px">Add New Field</h5>
-                        <div class="mb-2" style="padding:10px">
-                            <input type="text" class="form-control" name="new_key" placeholder="New Key">
-                        </div>
-                        <div class="mb-2" style="padding:10px">
-                            <input type="text" class="form-control" name="new_value" placeholder="New Value">
-                        </div>
-                        <button type="submit" class="btn btn-primary">Insert</button>
-                    </form>
-
-                    <form action="/push_to_original" method="post" class="mt-3">
-                        <button type="submit" class="btn btn-success ms-2" style="float:right"><i class="bi bi-plus"></i></button>
-                    </form>
-                </div>
-            </div>    
-        {% else %}
-        <p>No file uploaded. First upload file!</p>    
-        {% endif %} -->
+         
 
         {% if preview %}
         <div id="preview-container">
@@ -84,26 +44,50 @@
                 <form id="preview-form" action="/update_preview" method="post" onsubmit="return updatePreview(event)">
                     <div style="max-height: 300px; overflow-y: auto;">
                         {% for unit in preview.units %}
-                            <div class="border p-3 mb-3 rounded bg-light">
-                                <h5>Unit {{ loop.index }}</h5>
-                                {% for key, value in unit.items() %}
-                                    <div class="mb-2">
-                                        <label><strong>{{ key }}:</strong></label>
-                                        <input type="text" class="form-control" name="units[{{ loop.index0 }}][{{ key }}]" value="{{ value }}">
-                                    </div>
-                                {% endfor %}
+                            {% set unit_index = loop.index0 %}
+                            <div class="card mb-3 border-secondary">
+                                <div class="card-header bg-secondary text-white">
+                                    Unit {{ loop.index }}
+                                </div>
+                                <div class="card-body p-0">
+                                    <table class="table table-bordered table-sm mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 30%;">Field</th>
+                                                <th>Value</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for key, value in unit.items() %}
+                                                <tr>
+                                                    <td><label for="unit-{{ unit_index }}-{{ key }}">{{ key }}</label></td>
+                                                    <td>
+                                                        <input type="text"
+                                                            class="form-control"
+                                                            id="unit-{{ unit_index }}-{{ key }}"
+                                                            name="units[{{ unit_index }}][{{ key }}]"
+                                                            value="{{ value }}">
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         {% endfor %}
                     </div>
+
+
                     <hr>
                     <h5>Add New Unit</h5>
-                    <div id="unit-fields"></div>
+                    <div id="unit-fields" class="mb-3"></div>
 
                     <button type="button" class="btn btn-secondary mb-2" onclick="addUnitField()">Add Field</button>
 
                     <input type="hidden" name="new_unit_fields" id="new_unit_fields_json">
                     <button type="submit" class="btn btn-primary">Insert / Update Units</button>
                 </form>
+
 
                 <form action="/push_to_original" method="post" class="mt-3">
                     <button type="submit" class="btn btn-success ms-2" style="float:right"><i class="bi bi-plus"></i></button>
@@ -176,50 +160,55 @@ function updatePreview(event) {
     return false;
 }
 
-let unitFields = [];
+let newUnit = {};
 
-function addUnitField() {
-    const index = unitFields.length;
-    const container = document.getElementById('unit-fields');
+    function addUnitField() {
+        const container = document.getElementById("unit-fields");
+        const index = Object.keys(newUnit).length;
 
-    const row = document.createElement('div');
-    row.className = 'row mb-2';
-    row.innerHTML = `
-        <div class="col-md-5">
-            <input type="text" class="form-control" placeholder="Key" onchange="updateUnitField(${index}, 'key', this.value)">
-        </div>
-        <div class="col-md-5">
-            <input type="text" class="form-control" placeholder="Value" onchange="updateUnitField(${index}, 'value', this.value)">
-        </div>
-        <div class="col-md-2">
-            <button type="button" class="btn btn-danger" onclick="removeUnitField(${index})">X</button>
-        </div>
-    `;
-    container.appendChild(row);
-    unitFields.push({key: '', value: ''});
-    updateJsonField();
-}
+        const div = document.createElement("div");
+        div.className = "row mb-2";
+        div.innerHTML = `
+            <div class="col-md-5">
+                <input type="text" class="form-control" placeholder="Field name" onchange="updateNewUnit(${index}, this.value, 'key')">
+            </div>
+            <div class="col-md-5">
+                <input type="text" class="form-control" placeholder="Value" onchange="updateNewUnit(${index}, this.value, 'value')">
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-danger" onclick="removeField(this)">X</button>
+            </div>
+        `;
+        container.appendChild(div);
 
-function updateUnitField(index, type, value) {
-    unitFields[index][type] = value;
-    updateJsonField();
-}
-
-function removeUnitField(index) {
-    unitFields.splice(index, 1);
-    document.getElementById('unit-fields').children[index].remove();
-    updateJsonField();
-}
-
-function updateJsonField() {
-    const data = {};
-    for (const pair of unitFields) {
-        if (pair.key.trim() !== '' && pair.value.trim() !== '') {
-            data[pair.key.trim()] = pair.value.trim();
-        }
+        newUnit[index] = { key: '', value: '' };
     }
-    document.getElementById('new_unit_fields_json').value = JSON.stringify(data);
-}
+
+    function updateNewUnit(index, val, type) {
+        if (!newUnit[index]) newUnit[index] = { key: '', value: '' };
+        newUnit[index][type] = val;
+
+        // Build clean object
+        const cleaned = {};
+        for (const entry of Object.values(newUnit)) {
+            if (entry.key && entry.value) {
+                cleaned[entry.key] = entry.value;
+            }
+        }
+
+        document.getElementById("new_unit_fields_json").value = JSON.stringify(cleaned);
+    }
+
+    function removeField(btn) {
+        const div = btn.parentElement.parentElement;
+        div.remove();
+        // Clean state if needed
+    }
+
+    function updatePreview(event) {
+        // Optional: Confirm or validate before submission
+        return true;
+    }
 
 </script>
 
