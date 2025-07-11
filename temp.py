@@ -6,6 +6,7 @@ from pdf2image import convert_from_path
 from PIL import Image
 import re
 
+
 app = Flask(__name__)
 UPLOAD_FOLDER = 'source'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -131,67 +132,102 @@ def home():
     return render_template('home.html', filenames=all_filenames, preview=preview)
 
 
+import json
 from collections import defaultdict
 
 @app.route('/update_preview', methods=['POST'])
 def update_preview():
-    summary_data = request.form.to_dict()
-    updated_summary = {}
-    updated_units = defaultdict(dict)
+    import json, re
+    from flask import flash, redirect, url_for
 
-    for key in summary_data:
-        if key.startswith("summary["):
-            actual_key = key[8:-1]
-            updated_summary[actual_key] = request.form.get(key)
+    preview = preview_collection.find_one(sort=[('_id', -1)])
+    if not preview:
+        flash("No preview available to update. Please upload a file.", "danger")
+        return redirect(url_for('home'))
 
-        elif key.startswith("units["):
-            unit_index = re.search(r'units\[(\d+)\]\[(.+?)\]', key)
-            if unit_index:
-                idx, subkey = unit_index.groups()
-                updated_units[int(idx)][subkey] = request.form.get(key)
+    existing_units = preview.get("units", [])
+    updated_units = {}     # updates to existing units
+    new_units = {}         # new entries reusing same indexes (0, 1, ...) but outside existing range
 
-    doc = preview_collection.find_one()
-    if doc:
-        preview_collection.update_one(
-            {"_id": doc["_id"]},
-            {"$set": {
-                "summary": updated_summary,
-                "units": list(updated_units.values())
-            }}
-        )
-        doc['summary'] = updated_summary
-        doc['units'] = list(updated_units.values())
+    existing_len = len(existing_units)
 
-    return render_template('preview_section.html', preview=doc)
+    # Parse all form fields
+    for key, value in request.form.items():
+        unit_match = re.match(r'units\[(\d+)\]\[(.+?)\]', key)
+        if unit_match:
+            index = int(unit_match.group(1))
+            field = unit_match.group(2)
+            value = value.strip()
+
+            # Classify as update or new
+            if index < existing_len:
+                if index not in updated_units:
+                    updated_units[index] = {}
+                updated_units[index][field] = value
+            else:
+                if index not in new_units:
+                    new_units[index] = {}
+                new_units[index][field] = value
+
+    # Merge updates with existing units
+    merged_units = []
+    for idx, original in enumerate(existing_units):
+        merged = original.copy()
+        if idx in updated_units:
+            merged.update(updated_units[idx])
+        merged_units.append(merged)
+
+    # Append any new units
+    for idx in sorted(new_units.keys()):
+        new_unit = new_units[idx]
+        if new_unit:  # avoid empty units
+            merged_units.append(new_unit)
+
+    # If extra unit is passed via JSON string
+    new_unit_data = request.form.get("new_unit_fields")
+    if new_unit_data:
+        try:
+            new_unit = json.loads(new_unit_data)
+            if isinstance(new_unit, dict) and new_unit:
+                merged_units.append(new_unit)
+        except json.JSONDecodeError:
+            flash("Invalid new unit data submitted.", "warning")
+
+    # Update in DB
+    preview_collection.update_one(
+        {"_id": preview["_id"]},
+        {"$set": {"units": merged_units}}
+    )
+
+    updated_preview = preview_collection.find_one({"_id": preview["_id"]})
+    return render_template("home.html", preview=updated_preview)
+
 
 
 @app.route('/push_to_original', methods=['POST'])
 def push_to_original():
-    doc = preview_collection.find_one()
-    if not doc:
+    preview = preview_collection.find_one(sort=[('_id', -1)])
+    if not preview:
         flash("No preview available to push.", "danger")
-        return redirect('/')
+        return redirect(url_for('home'))
 
-    try:
-        existing = collection.find_one({"filename": doc["filename"]})
-        if existing:
-            collection.update_one(
-                {"_id": existing["_id"]},
-                {"$set": {
-                    "summary": doc.get("summary", {}),
-                    "content": doc.get("content", "")
-                }}
-            )
-            flash(f"Updated existing record: {doc['filename']}", "success")
-        else:
-            collection.insert_one(doc)
-            flash(f"Inserted new document: {doc['filename']}", "success")
+    # Find matching document (by filename, ID, etc.)
+    existing = collection.find_one({"filename": preview["filename"]})
+    new_units = preview.get("units", [])
 
-    except Exception as e:
-        flash(f"Error while pushing to database: {str(e)}", "danger")
+    if existing:
+        # Append units to existing document
+        collection.update_one(
+            {"_id": existing["_id"]},
+            {"$push": {"units": {"$each": new_units}}}
+        )
+        flash("Units appended to existing document.", "success")
+    else:
+        # Insert as new
+        collection.insert_one(preview)
+        flash("New document added to original collection.", "success")
 
-    return redirect('/')
-
+    return redirect(url_for('home'))
 
 
 
@@ -220,30 +256,73 @@ def search():
     filename = request.args.get('filename', '')
 
     search_filter = {}
+    conditions = []
+
     if query:
-        search_filter["content"] = {"$regex": query, "$options": "i"}
+        # Search in content
+        conditions.append({"content": {"$regex": query, "$options": "i"}})
+
+        # Search inside any field of any unit
+        conditions.append({"units": {
+            "$elemMatch": {
+                "$or": [
+                    {"unit_name": {"$regex": query, "$options": "i"}},
+                    {"area": {"$regex": query, "$options": "i"}},
+                    {"beds": {"$regex": query, "$options": "i"}},
+                    {"baths": {"$regex": query, "$options": "i"}},
+                    {"level": {"$regex": query, "$options": "i"}},
+                    {"Price": {"$regex": query, "$options": "i"}},
+                    {"Bed": {"$regex": query, "$options": "i"}},
+                    {"name": {"$regex": query, "$options": "i"}}
+                ]
+            }
+        }})
+
     if filename:
-        search_filter["filename"] = {"$regex": filename, "$options": "i"}
+        conditions.append({"filename": {"$regex": filename, "$options": "i"}})
+
+    if conditions:
+        search_filter["$and"] = conditions
 
     documents = collection.find(search_filter)
 
     results = []
     for doc in documents:
-        if query:
-            snippets = highlight_snippet(doc['content'], query)
-        else:
+        snippets = []
+
+        # Highlight from content
+        if query and "content" in doc and query.lower() in doc["content"].lower():
+            snippets.extend(highlight_snippet(doc['content'], query))
+
+        # Highlight from units
+        if query and "units" in doc:
+            for unit in doc["units"]:
+                for key, val in unit.items():
+                    if isinstance(val, str) and query.lower() in val.lower():
+                        snippets.append(f"<strong>{key}</strong>: {val}")
+
+        # If no query but want to show preview
+        if not query:
             brief = " ".join(doc['content'].split()[:50]) + "..."
             snippets = [brief]
+
         results.append({
             "filename": doc['filename'],
             "snippets": snippets,
             "link": url_for('serve_pdf', filename=doc['filename'])
         })
 
-    # Get all unique filenames from MongoDB
+    # Get all filenames
     all_filenames = collection.distinct("filename")
 
-    return render_template('result.html', results=results, query=query, filename=filename, filenames=all_filenames)
+    return render_template(
+        'result.html',
+        results=results,
+        query=query,
+        filename=filename,
+        filenames=all_filenames
+    )
+
 
 
 @app.route('/pdfs/<path:filename>')

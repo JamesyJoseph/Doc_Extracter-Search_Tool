@@ -12,12 +12,20 @@
 <body class="bg-light">
     <div class="container py-5">
 
-        {% for category, message in messages %}
-        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        {% endfor %}
+        {% set messages = get_flashed_messages(with_categories=true) %}
+
+        {% macro render_flash(target_category, alert_class='info', timeout=2000) %}
+            <div class="position-fixed bottom-0 start-50 translate-middle-x mb-4 z-3" style="min-width: 300px; max-width: 600px;" data-timeout="{{ timeout }}">
+                {% for category, message in messages %}
+                    {% if category == target_category %}
+                    <div class="alert alert-{{ alert_class }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <!-- <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button> -->
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% endmacro %}
 
         <h1 class="mb-4 text-center">PDF Data Extract & Search</h1>
 
@@ -30,50 +38,13 @@
                     </div>
                     <button type="submit" class="btn btn-primary">Upload</button>
                 </form>
+
+                {{ render_flash('upload', 'success') }}
+
             </div>
         </div>
 
-         <!-- {% if preview is not none and preview %}
-            <div id="preview-container">
-                <div class="card mb-4 border-warning">
-                    <div class="card-header bg-warning text-dark fw-bold">
-                        {{ preview.filename }}
-                    </div>
-                    <form id="preview-form" action="/update_preview" method="post" onsubmit="return updatePreview(event)">
-                        <div style="max-height: 300px; overflow-y: auto;">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr><th>Field</th><th>Value</th></tr>
-                            </thead>
-                            <tbody>
-                            {% for key, value in preview.summary.items() %}
-                                <tr>
-                                    <td>{{ key }}</td>
-                                    <td><input type="text" class="form-control" name="summary[{{ key }}]" value="{{ value }}"></td>
-                                </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                        </div>
-                        <hr>
-                        <h5 style="padding:10px">Add New Field</h5>
-                        <div class="mb-2" style="padding:10px">
-                            <input type="text" class="form-control" name="new_key" placeholder="New Key">
-                        </div>
-                        <div class="mb-2" style="padding:10px">
-                            <input type="text" class="form-control" name="new_value" placeholder="New Value">
-                        </div>
-                        <button type="submit" class="btn btn-primary">Insert</button>
-                    </form>
-
-                    <form action="/push_to_original" method="post" class="mt-3">
-                        <button type="submit" class="btn btn-success ms-2" style="float:right"><i class="bi bi-plus"></i></button>
-                    </form>
-                </div>
-            </div>    
-        {% else %}
-        <p>No file uploaded. First upload file!</p>    
-        {% endif %} -->
+         
 
         {% if preview %}
         <div id="preview-container">
@@ -82,29 +53,59 @@
                     {{ preview.filename }}
                 </div>
                 <form id="preview-form" action="/update_preview" method="post" onsubmit="return updatePreview(event)">
-                    <div style="max-height: 300px; overflow-y: auto;">
+                    <div class="scroll-box" style="max-height: 300px; overflow-y: auto;">
                         {% for unit in preview.units %}
-                            <div class="border p-3 mb-3 rounded bg-light">
-                                <h5>Unit {{ loop.index }}</h5>
-                                {% for key, value in unit.items() %}
-                                    <div class="mb-2">
-                                        <label><strong>{{ key }}:</strong></label>
-                                        <input type="text" class="form-control" name="units[{{ loop.index0 }}][{{ key }}]" value="{{ value }}">
-                                    </div>
-                                {% endfor %}
+                            {% set unit_index = loop.index0 %}
+                            <div class="card mb-3 border-secondary">
+                                <div class="card-header bg-secondary text-white">
+                                    Unit {{ loop.index }}
+                                </div>
+                                <div class="card-body p-0">
+                                    <table class="table table-bordered table-sm mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 30%;">Field</th>
+                                                <th>Value</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for key, value in unit.items() %}
+                                                <tr>
+                                                    <td><label for="unit-{{ unit_index }}-{{ key }}">{{ key }}</label></td>
+                                                    <td>
+                                                        <input type="text"
+                                                            class="form-control"
+                                                            id="unit-{{ unit_index }}-{{ key }}"
+                                                            name="units[{{ unit_index }}][{{ key }}]"
+                                                            value="{{ value }}">
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         {% endfor %}
                     </div>
+
+                    <div class="p-2">
+                        {{ render_flash('update', 'info') }}
+                        {{ render_flash('insert', 'success') }}
+                        {{ render_flash('danger', 'danger') }}
+                        {{ render_flash('warning', 'warning') }}
+                    </div>
+
                     <hr>
-                    <h5 style="padding:5px">Add New Field</h5>
-                        <div class="mb-2" style="padding:10px">
-                            <input type="text" class="form-control" name="new_key" placeholder="New Key">
-                        </div>
-                        <div class="mb-2" style="padding:10px">
-                            <input type="text" class="form-control" name="new_value" placeholder="New Value">
-                        </div>
-                        <button type="submit" class="btn btn-primary">Insert</button>
+                    <h5 class="text-center mt-4 mb-3"><u>Add New Unit</u></h5>
+                    <div id="unit-fields" class="mt-3 "></div>
+                    <div class="d-flex justify-content-center gap-3 mt-2">
+                        <button type="button" class="btn btn-secondary mb-2" onclick="addUnitField()">Add Field</button>
+
+                        <input type="hidden" name="new_unit_fields" id="new_unit_fields_json">
+                        <button type="submit" class="btn btn-primary ms-2">Insert</button>
+                    </div>
                 </form>
+
 
                 <form action="/push_to_original" method="post" class="mt-3">
                     <button type="submit" class="btn btn-success ms-2" style="float:right"><i class="bi bi-plus"></i></button>
@@ -113,12 +114,17 @@
             </div>
         </div>
         {% else %}
-            <p>No structured unit details found in this file.</p>
+            <h3>Upload a file!</h3>
         {% endif %}
 
 
         <br><br>
 
+        <div class="p-2">
+            {{ render_flash('info', 'info') }}
+            {{ render_flash('success', 'success', 0) }}
+            {{ render_flash('error', 'danger') }}
+        </div>
 
         <div class="card mb-4">
             <div class="card-header">Search in PDFs</div>
@@ -127,8 +133,6 @@
                     <div class="col-md-5">
                         <input type="text" name="q" class="form-control" placeholder="Search by keyword...">
                     </div>
-
-
                     <div class="col-md-5">
                         <select name="filename" class="form-control">
                             <option value="" disabled selected> Search by File </option>
@@ -152,6 +156,8 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 </body>
 
 <script>
@@ -160,6 +166,7 @@ function updatePreview(event) {
 
     const form = document.getElementById('preview-form');
     const formData = new FormData(form);
+    console.log("Data",form);
 
     fetch('/update_preview', {
         method: 'POST',
@@ -175,6 +182,83 @@ function updatePreview(event) {
 
     return false;
 }
+
+let newUnit = {};
+
+    function addUnitField() {
+        const container = document.getElementById("unit-fields");
+        const index = Object.keys(newUnit).length;
+
+        const div = document.createElement("div");
+        div.className = "row mb-2";
+        div.innerHTML = `
+            <div class="col-md-5">
+                <input type="text" class="form-control" placeholder="Field name" onchange="updateNewUnit(${index}, this.value, 'key')">
+            </div>
+            <div class="col-md-5">
+                <input type="text" class="form-control" placeholder="Value" onchange="updateNewUnit(${index}, this.value, 'value')">
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-danger" onclick="removeField(this)">X</button>
+            </div>
+        `;
+        container.appendChild(div);
+
+        newUnit[index] = { key: '', value: '' };
+    }
+
+    function updateNewUnit(index, val, type) {
+        if (!newUnit[index]) newUnit[index] = { key: '', value: '' };
+        newUnit[index][type] = val;
+
+        const cleaned = {};
+        for (const entry of Object.values(newUnit)) {
+            if (entry.key && entry.value) {
+                cleaned[entry.key] = entry.value;
+            }
+        }
+
+        document.getElementById("new_unit_fields_json").value = JSON.stringify(cleaned);
+    }
+
+    function removeField(btn) {
+        const div = btn.parentElement.parentElement;
+        div.remove();
+        
+    }
+
+    function updatePreview(event) {
+        
+        return true;
+    }
+
+
+ document.querySelectorAll('[data-timeout]').forEach(wrapper => {
+    const timeout = parseInt(wrapper.dataset.timeout);
+    if (timeout > 0) {
+      setTimeout(() => {
+        const alert = wrapper.querySelector('.alert');
+        if (alert) {
+          alert.classList.remove('show');
+          alert.classList.add('fade');
+          setTimeout(() => alert.remove(), 300);
+        }
+      }, timeout);
+    }
+  });
+
+/*setTimeout(function () {
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(function (alert) {
+
+      alert.classList.remove('show'); 
+      alert.classList.add('fade');
+
+      setTimeout(() => {
+        alert.remove();
+      }, 300); 
+    });
+  }, 2000); */
 </script>
 
 </html>

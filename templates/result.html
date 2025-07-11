@@ -17,9 +17,11 @@
     {% for doc in results %}
     <div style="margin-bottom: 20px;">
         <h3><a href="{{ doc.link }}" target="_blank">{{ doc.filename }}</a></h3>
+        <div class="scroll-box" style="max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; border-radius: 8px; background-color: #fff;" >
         {% for snippet in doc.snippets %}
             <p>{{ snippet|safe }}...</p>
         {% endfor %}
+        </div>
     </div>
     {% else %}
         <p>No results found.</p>
