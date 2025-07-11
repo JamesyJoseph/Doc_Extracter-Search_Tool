@@ -1,0 +1,57 @@
+{% if preview %}
+    <div class="card mb-4 border-warning">
+        <div class="card-header bg-warning text-dark fw-bold">
+            {{ preview.filename }}
+        </div>
+        <form id="preview-form" action="/update_preview" method="post" onsubmit="return updatePreview(event)">
+           <div style="max-height: 300px; overflow-y: auto;">
+                        {% for unit in preview.units %}
+                            {% set unit_index = loop.index0 %}
+                            <div class="card mb-3 border-secondary">
+                                <div class="card-header bg-secondary text-white">
+                                    Unit {{ loop.index }}
+                                </div>
+                                <div class="card-body p-0">
+                                    <table class="table table-bordered table-sm mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 30%;">Field</th>
+                                                <th>Value</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for key, value in unit.items() %}
+                                                <tr>
+                                                    <td><label for="unit-{{ unit_index }}-{{ key }}">{{ key }}</label></td>
+                                                    <td>
+                                                        <input type="text"
+                                                            class="form-control"
+                                                            id="unit-{{ unit_index }}-{{ key }}"
+                                                            name="units[{{ unit_index }}][{{ key }}]"
+                                                            value="{{ value }}">
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+
+
+                    <hr>
+                    <h5>Add New Unit</h5>
+                    <div id="unit-fields" class="mb-3"></div>
+
+                    <button type="button" class="btn btn-secondary mb-2" onclick="addUnitField()">Add Field</button>
+
+                    <input type="hidden" name="new_unit_fields" id="new_unit_fields_json">
+                    <button type="submit" class="btn btn-primary">Insert / Update Units</button>
+        </form>
+
+        <form action="/push_to_original" method="post" class="mt-3">
+            <button type="submit" class="btn btn-success ms-2" style="float:right"><i class="bi bi-plus"></i></button>
+        </form>
+    </div>
+{% endif %}

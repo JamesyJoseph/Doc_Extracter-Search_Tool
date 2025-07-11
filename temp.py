@@ -115,17 +115,17 @@ def home():
                     "filename": uploaded_file.filename,
                     "summary": summary,
                     "content": content,
-                    "units": structured_units  
+                    "units": structured_units  # <-- include extracted unit table data
                 })
 
 
                 preview = preview_collection.find_one()
-                flash("PDF uploaded!", "upload")
+                
                 session['uploaded'] = True
 
         return redirect('/')
     
-    if request.args.get('refresh') == '1':       
+    if request.args.get('refresh') == '1':
         preview_collection.delete_many({})
        
     all_filenames = collection.distinct("filename")
@@ -151,6 +151,7 @@ def update_preview():
 
     existing_len = len(existing_units)
 
+    # Parse all form fields
     for key, value in request.form.items():
         unit_match = re.match(r'units\[(\d+)\]\[(.+?)\]', key)
         if unit_match:
@@ -158,6 +159,7 @@ def update_preview():
             field = unit_match.group(2)
             value = value.strip()
 
+            # Classify as update or new
             if index < existing_len:
                 if index not in updated_units:
                     updated_units[index] = {}
@@ -167,32 +169,31 @@ def update_preview():
                     new_units[index] = {}
                 new_units[index][field] = value
 
+    # Merge updates with existing units
     merged_units = []
-    any_updates = False
     for idx, original in enumerate(existing_units):
         merged = original.copy()
         if idx in updated_units:
             merged.update(updated_units[idx])
-            any_updates = True
         merged_units.append(merged)
 
+    # Append any new units
     for idx in sorted(new_units.keys()):
         new_unit = new_units[idx]
-        if new_unit:  
+        if new_unit:  # avoid empty units
             merged_units.append(new_unit)
-    if any_updates:
-        flash("Existing unit(s) updated successfully.", "update")
-    
+
+    # If extra unit is passed via JSON string
     new_unit_data = request.form.get("new_unit_fields")
     if new_unit_data:
         try:
             new_unit = json.loads(new_unit_data)
             if isinstance(new_unit, dict) and new_unit:
                 merged_units.append(new_unit)
-                flash("New unit(s) inserted", "insert")
         except json.JSONDecodeError:
             flash("Invalid new unit data submitted.", "warning")
 
+    # Update in DB
     preview_collection.update_one(
         {"_id": preview["_id"]},
         {"$set": {"units": merged_units}}
@@ -207,21 +208,24 @@ def update_preview():
 def push_to_original():
     preview = preview_collection.find_one(sort=[('_id', -1)])
     if not preview:
-        flash("No preview available to push.", "error")
+        flash("No preview available to push.", "danger")
         return redirect(url_for('home'))
 
+    # Find matching document (by filename, ID, etc.)
     existing = collection.find_one({"filename": preview["filename"]})
     new_units = preview.get("units", [])
-    
+
     if existing:
+        # Append units to existing document
         collection.update_one(
             {"_id": existing["_id"]},
             {"$push": {"units": {"$each": new_units}}}
         )
-        flash("Updations/New Units appended to database.", "success")
+        flash("Units appended to existing document.", "success")
     else:
+        # Insert as new
         collection.insert_one(preview)
-        flash("New document added to original collection.", "info")
+        flash("New document added to original collection.", "success")
 
     return redirect(url_for('home'))
 
@@ -248,63 +252,67 @@ def highlight_snippet(text, keyword, context_words=10, max_snippets=5):
 
 @app.route('/search', methods=['GET'])
 def search():
-    query = request.args.get('q', '').strip()
-    filename = request.args.get('filename', '').strip()
+    query = request.args.get('q', '')
+    filename = request.args.get('filename', '')
 
-    search_filter = []
+    search_filter = {}
+    conditions = []
+
     if query:
-        regex = {"$regex": query, "$options": "i"}
+        # Search in content
+        conditions.append({"content": {"$regex": query, "$options": "i"}})
 
-        search_filter.extend([
-            {"content": regex},
-            {"summary": regex},
-            {"keywords": regex},
-            {"units": {
-                "$elemMatch": {
-                    "$or": [
-                        {k: regex} for k in ["unit_name", "area", "beds", "baths", "level", "Price", "Bed", "name", "floor"]
-                    ]
-                }
-            }}
-        ])
+        # Search inside any field of any unit
+        conditions.append({"units": {
+            "$elemMatch": {
+                "$or": [
+                    {"unit_name": {"$regex": query, "$options": "i"}},
+                    {"area": {"$regex": query, "$options": "i"}},
+                    {"beds": {"$regex": query, "$options": "i"}},
+                    {"baths": {"$regex": query, "$options": "i"}},
+                    {"level": {"$regex": query, "$options": "i"}},
+                    {"Price": {"$regex": query, "$options": "i"}},
+                    {"Bed": {"$regex": query, "$options": "i"}},
+                    {"name": {"$regex": query, "$options": "i"}}
+                ]
+            }
+        }})
 
-    final_filter = {}
     if filename:
-        final_filter["filename"] = {"$regex": filename, "$options": "i"}
-    
-    if query:
-        final_filter["$or"] = search_filter
+        conditions.append({"filename": {"$regex": filename, "$options": "i"}})
 
-    documents = collection.find(final_filter)
-    
+    if conditions:
+        search_filter["$and"] = conditions
+
+    documents = collection.find(search_filter)
+
     results = []
     for doc in documents:
         snippets = []
 
-        if "content" in doc and isinstance(doc["content"], str) and query.lower() in doc["content"].lower():
-            snippets.append(f"<strong>Content:</strong> ...{highlight_snippet(doc['content'], query)}...")
+        # Highlight from content
+        if query and "content" in doc and query.lower() in doc["content"].lower():
+            snippets.extend(highlight_snippet(doc['content'], query))
 
-        if "summary" in doc and isinstance(doc["summary"], str) and query.lower() in doc["summary"].lower():
-            snippets.append(f"<strong>Summary:</strong> ...{highlight_snippet(doc['summary'], query)}...")
-
-        if "keywords" in doc and isinstance(doc["keywords"], list):
-            matched_keywords = [kw for kw in doc["keywords"] if isinstance(kw, str) and query.lower() in kw.lower()]
-            if matched_keywords:
-                snippets.append(f"<strong>Keywords:</strong> " + ", ".join(matched_keywords))
-
-        if "units" in doc and isinstance(doc["units"], list):
+        # Highlight from units
+        if query and "units" in doc:
             for unit in doc["units"]:
-                for k, v in unit.items():
-                    if isinstance(v, str) and query.lower() in v.lower():
-                        snippets.append(f"<strong>Unit {k}:</strong> {v}")
+                for key, val in unit.items():
+                    if isinstance(val, str) and query.lower() in val.lower():
+                        snippets.append(f"<strong>{key}</strong>: {val}")
 
-        if snippets:
-            results.append({
-                "filename": doc["filename"],
-                "snippets": snippets,
-                "link": url_for('serve_pdf', filename=doc['filename'])
-            })
+        # If no query but want to show preview
+        if not query:
+            brief = " ".join(doc['content'].split()[:50]) + "..."
+            snippets = [brief]
 
+        results.append({
+            "filename": doc['filename'],
+            "snippets": snippets,
+            "link": url_for('serve_pdf', filename=doc['filename'])
+        })
+
+    # Get all filenames
     all_filenames = collection.distinct("filename")
 
     return render_template(
@@ -317,8 +325,6 @@ def search():
 
 
 
-
-
 @app.route('/pdfs/<path:filename>')
 def serve_pdf(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
@@ -326,7 +332,6 @@ def serve_pdf(filename):
 @app.route('/clear', methods=['POST'])
 def clear_database():
     collection.delete_many({})
-    flash("Database Cleared Successfully","warning")
     return redirect('/')
 
 if __name__ == '__main__':
