@@ -189,7 +189,7 @@ def update_preview():
             new_unit = json.loads(new_unit_data)
             if isinstance(new_unit, dict) and new_unit:
                 merged_units.append(new_unit)
-                flash("Key-Value inserted", "insert")
+                flash("New unit(s) inserted", "insert")
         except json.JSONDecodeError:
             flash("Invalid new unit data submitted.", "warning")
 
@@ -218,7 +218,7 @@ def push_to_original():
             {"_id": existing["_id"]},
             {"$push": {"units": {"$each": new_units}}}
         )
-        flash("Updations/New Units appended to existing document.", "success")
+        flash("Updations/New Units appended to database.", "success")
     else:
         collection.insert_one(preview)
         flash("New document added to original collection.", "info")
@@ -326,6 +326,7 @@ def serve_pdf(filename):
 @app.route('/clear', methods=['POST'])
 def clear_database():
     collection.delete_many({})
+    flash("Database Cleared Successfully","warning")
     return redirect('/')
 
 if __name__ == '__main__':
